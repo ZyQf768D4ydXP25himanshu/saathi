@@ -87,6 +87,14 @@ service cloud.firestore {
              data.city is string && data.city.size() > 0 && data.city.size() < 100;
     }
 
+    function isValidBooking(data) {
+      return data.keys().hasAll(['eventId', 'userUid', 'amount', 'status']) &&
+             data.eventId is string &&
+             data.userUid is string &&
+             data.amount is number &&
+             data.status in ['pending', 'confirmed', 'cancelled'];
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -107,6 +115,17 @@ service cloud.firestore {
     match /waitlist/{email} {
       allow read: if isAdmin();
       allow create: if isValidWaitlist(request.resource.data);
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (resource.data.userUid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data) && (request.resource.data.userUid == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true; // Public settings like platform name
+      allow write: if isAdmin();
     }
   }
 }

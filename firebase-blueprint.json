@@ -48,6 +48,24 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "city"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "A user's booking for an event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventId": { "type": "string" },
+        "eventTitle": { "type": "string" },
+        "userUid": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"] },
+        "paymentId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "userUid", "amount", "status"]
     }
   },
   "firestore": {
@@ -62,6 +80,10 @@
     "/waitlist/{email}": {
       "schema": "WaitlistEntry",
       "description": "Waitlist signups"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Event bookings"
     }
   }
 }
