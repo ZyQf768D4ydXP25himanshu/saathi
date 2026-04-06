@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Auth UID)
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - displayName: string (required) - User's full name
+    //   - email: string (required, email format) - User's email address
+    //   - photoURL: string (optional, uri format) - Profile picture URL
+    //   - trustScore: number (optional, 0-100) - User's trust score
+    //   - isVerified: bool (optional) - Aadhaar verification status
+    //   - role: string (optional, enum: user, host, admin) - User's role
+    //   - createdAt: timestamp (optional) - Account creation timestamp
+    //
+    // Collection: events
+    // Document ID: eventId
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - hostUid: string (required)
+    //   - hostName: string (required)
+    //   - date: timestamp (required)
+    //   - location: string (required)
+    //   - city: string (required)
+    //   - category: string (optional)
+    //   - budget: number (optional)
+    //   - maxAttendees: number (optional)
+    //   - attendees: list (optional)
+    //   - isVerified: bool (optional)
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: waitlist
+    // Document ID: email
+    // Fields:
+    //   - email: string (required, email format)
+    //   - city: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "shuklashankarnath009@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName']) &&
+             data.uid is string &&
+             data.email is string && isValidEmail(data.email) &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100;
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['title', 'hostUid', 'date', 'location', 'city']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.hostUid is string &&
+             data.location is string &&
+             data.city is string;
+    }
+
+    function isValidWaitlist(data) {
+      return data.keys().hasAll(['email', 'city', 'createdAt']) &&
+             data.email is string && isValidEmail(data.email) &&
+             data.city is string && data.city.size() > 0 && data.city.size() < 100;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidEvent(request.resource.data) && (request.resource.data.hostUid == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && (resource.data.hostUid == request.auth.uid || isAdmin()) && isValidEvent(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.hostUid == request.auth.uid || isAdmin());
+    }
+
+    match /waitlist/{email} {
+      allow read: if isAdmin();
+      allow create: if isValidWaitlist(request.resource.data);
+    }
+  }
+}

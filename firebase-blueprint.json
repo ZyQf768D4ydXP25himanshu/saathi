@@ -1,0 +1,67 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A registered user on Saathi",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User's full name" },
+        "email": { "type": "string", "format": "email", "description": "User's email address" },
+        "photoURL": { "type": "string", "format": "uri", "description": "Profile picture URL" },
+        "trustScore": { "type": "number", "description": "User's trust score (0-100)" },
+        "isVerified": { "type": "boolean", "description": "Whether the user is Aadhaar verified" },
+        "role": { "type": "string", "enum": ["user", "host", "admin"], "description": "User's role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "email", "displayName"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "A social gathering event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "hostUid": { "type": "string" },
+        "hostName": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "location": { "type": "string" },
+        "city": { "type": "string" },
+        "category": { "type": "string" },
+        "budget": { "type": "number" },
+        "maxAttendees": { "type": "number" },
+        "attendees": { "type": "array", "items": { "type": "string" } },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "hostUid", "date", "location", "city"]
+    },
+    "WaitlistEntry": {
+      "title": "Waitlist Entry",
+      "description": "A user who joined the waitlist",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "city": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "city"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/events/{eventId}": {
+      "schema": "Event",
+      "description": "Event details"
+    },
+    "/waitlist/{email}": {
+      "schema": "WaitlistEntry",
+      "description": "Waitlist signups"
+    }
+  }
+}
