@@ -25,6 +25,8 @@ interface UserProfile {
   isVerified: boolean;
   trustScore: number;
   createdAt: any;
+  verificationStatus?: 'pending' | 'verified' | 'rejected';
+  hostApplicationStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 const AdminUsers: React.FC = () => {
@@ -52,11 +54,30 @@ const AdminUsers: React.FC = () => {
   const updateRole = async (uid: string, role: 'user' | 'host' | 'admin') => {
     if (!window.confirm(`Are you sure you want to change this user's role to ${role}?`)) return;
     try {
-      await updateDoc(doc(db, 'users', uid), { role });
+      const updates: any = { role };
+      if (role === 'host') {
+        updates.hostApplicationStatus = 'approved';
+      }
+      await updateDoc(doc(db, 'users', uid), updates);
       fetchUsers();
     } catch (error) {
       console.error('Update role error:', error);
       alert('Failed to update role');
+    }
+  };
+
+  const approveHost = async (uid: string) => {
+    if (!window.confirm("Approve this user as a verified host?")) return;
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        role: 'host',
+        hostApplicationStatus: 'approved',
+        isVerified: true // Usually hosts should be verified
+      });
+      fetchUsers();
+    } catch (error) {
+      console.error('Approve host error:', error);
+      alert('Failed to approve host');
     }
   };
 
@@ -166,17 +187,30 @@ const AdminUsers: React.FC = () => {
                       </select>
                     </td>
                     <td className="px-8 py-6">
-                      <button 
-                        onClick={() => toggleVerify(user.uid, user.isVerified)}
-                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                          user.isVerified 
-                            ? 'bg-emerald-50 text-emerald-600' 
-                            : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {user.isVerified ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
-                        {user.isVerified ? 'Verified' : 'Unverified'}
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={() => toggleVerify(user.uid, user.isVerified)}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                            user.isVerified 
+                              ? 'bg-emerald-50 text-emerald-600' 
+                              : user.verificationStatus === 'pending'
+                              ? 'bg-amber-50 text-amber-600 animate-pulse'
+                              : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {user.isVerified ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
+                          {user.isVerified ? 'Verified' : user.verificationStatus === 'pending' ? 'Pending ID' : 'Unverified'}
+                        </button>
+                        
+                        {user.hostApplicationStatus === 'pending' && (
+                          <button 
+                            onClick={() => approveHost(user.uid)}
+                            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-sm"
+                          >
+                            Approve Host
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2">

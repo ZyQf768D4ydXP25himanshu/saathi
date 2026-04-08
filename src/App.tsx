@@ -10,6 +10,7 @@ import Safety from './components/Safety';
 import Waitlist from './components/Waitlist';
 import Footer from './components/Footer';
 import LoginPage from './components/LoginPage';
+import Profile from './components/Profile';
 
 // Admin Components
 import AdminLayout from './components/admin/AdminLayout';
@@ -93,6 +94,11 @@ export default function App() {
             <Route path="/" element={
               <ProtectedRoute>
                 <MainLayout />
+              </ProtectedRoute>
+            } />
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             } />
 

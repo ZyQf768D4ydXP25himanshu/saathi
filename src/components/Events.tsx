@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Calendar, Users, ShieldCheck, ArrowRight, X, CreditCard, Loader2 } from 'lucide-react';
-import { db, collection, getDocs, query, limit, onSnapshot } from '../firebase';
+import { MapPin, Calendar, Users, ShieldCheck, ArrowRight, X, CreditCard, Loader2, Shield, Search, Filter } from 'lucide-react';
+import { db, collection, getDocs, query, limit, onSnapshot, addDoc, Timestamp } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { loadStripe } from '@stripe/stripe-js';
+import VerificationFlow from './VerificationFlow';
 
 interface Event {
   id: string;
@@ -24,9 +25,27 @@ interface Event {
 const Events: React.FC = () => {
   const { user, signIn } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [pendingBookingEvent, setPendingBookingEvent] = useState<Event | null>(null);
+  const [showCancel, setShowCancel] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
+
+  const categories = ['All', 'Networking', 'Social', 'Dinner', 'Workshops', 'Sports', 'Clubbing'];
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('booking') === 'cancel') {
+      setShowCancel(true);
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   // Sample data for initial display
   const sampleEvents: Event[] = [
@@ -75,6 +94,51 @@ const Events: React.FC = () => {
       attendees: [],
       isVerified: true,
     },
+    {
+      id: '4',
+      title: 'Privee: Saturday Night Fever',
+      description: 'Experience the ultimate luxury nightlife at Privee. Top DJs, premium drinks, and an electric atmosphere. Entry includes one complimentary drink.',
+      hostName: 'Nightlife Delhi',
+      hostUid: 'host4',
+      date: '2026-04-11T22:00:00Z',
+      location: 'Shangri-La Eros',
+      city: 'Delhi',
+      category: 'Clubbing',
+      budget: 2500,
+      maxAttendees: 50,
+      attendees: [],
+      isVerified: true,
+    },
+    {
+      id: '5',
+      title: 'Soho: Techno Takeover',
+      description: 'Dive into the underground techno scene at Soho. A night dedicated to pure beats and immersive lighting. Strictly for techno lovers.',
+      hostName: 'Vibe Check',
+      hostUid: 'host5',
+      date: '2026-04-17T21:30:00Z',
+      location: 'Chanakyapuri',
+      city: 'Delhi',
+      category: 'Clubbing',
+      budget: 1800,
+      maxAttendees: 40,
+      attendees: [],
+      isVerified: true,
+    },
+    {
+      id: '6',
+      title: 'Kitty Su: Neon Glow Party',
+      description: 'The boldest party in town is back! Wear your brightest neon and get ready to glow under the UV lights. Best dressed wins a surprise gift.',
+      hostName: 'The Lalit',
+      hostUid: 'host6',
+      date: '2026-04-24T22:30:00Z',
+      location: 'Barakhamba Road',
+      city: 'Delhi',
+      category: 'Clubbing',
+      budget: 2000,
+      maxAttendees: 60,
+      attendees: [],
+      isVerified: true,
+    },
   ];
 
   const handleBookNow = async (event: Event) => {
@@ -83,25 +147,36 @@ const Events: React.FC = () => {
       return;
     }
 
+    setPendingBookingEvent(event);
+    setIsVerifying(true);
+  };
+
+  const proceedToPayment = async () => {
+    const event = pendingBookingEvent;
+    if (!event || !user) return;
+
+    setIsVerifying(false);
+    setIsRedirecting(true);
     setBookingLoading(true);
     try {
       const stripePublishableKey = (import.meta as any).env.VITE_STRIPE_PUBLISHABLE_KEY;
       
       // Fallback for demo if keys are missing
       if (!stripePublishableKey || stripePublishableKey === "pk_test_...") {
-        console.warn("Stripe keys missing. Using Demo/UPI mode.");
+        console.warn("Stripe keys missing. Redirecting to Simulated Gateway.");
         
-        // Simulate a UPI/Paytm payment flow for the demo
+        // Simulate a redirect to a custom gateway page
         setTimeout(() => {
-          const confirmPayment = window.confirm(
-            `Demo Mode: Pay ₹${event.budget} via UPI/Paytm?\n\nIn a real app, this would open the Paytm/UPI app or show a QR code.`
-          );
-          if (confirmPayment) {
-            alert("Payment Successful! Your booking is confirmed.");
-            setSelectedEvent(null);
-          }
+          setIsRedirecting(false);
           setBookingLoading(false);
-        }, 1500);
+          // In a real app, this would be navigate('/simulated-gateway')
+          const choice = window.confirm(
+            `SECURE GATEWAY REDIRECT\n\nChoose Payment Method:\n1. UPI (Paytm/PhonePe/GPay)\n2. Credit/Debit Card\n3. Netbanking\n\nClick OK to simulate a successful UPI payment.`
+          );
+          if (choice) {
+            handleDemoBooking(event);
+          }
+        }, 2000);
         return;
       }
 
@@ -122,6 +197,7 @@ const Events: React.FC = () => {
       const session = await response.json();
       if (session.error) throw new Error(session.error);
 
+      // Redirect to Stripe's secure hosted page
       const result = await (stripe as any).redirectToCheckout({
         sessionId: session.id,
       });
@@ -131,35 +207,98 @@ const Events: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Booking error:', error);
-      alert(`Booking failed: ${error.message}`);
-    } finally {
+      alert(`Payment Gateway Error: ${error.message}`);
+      setIsRedirecting(false);
       setBookingLoading(false);
     }
   };
 
+  const handleDemoBooking = async (event: Event) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'bookings'), {
+        eventId: event.id,
+        eventTitle: event.title,
+        userUid: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        amount: event.budget,
+        status: 'confirmed',
+        paymentMethod: 'UPI/Simulated',
+        createdAt: Timestamp.now(),
+      });
+      alert("Payment Successful! Your booking is confirmed.");
+      setSelectedEvent(null);
+    } catch (error) {
+      console.error("Booking save error:", error);
+      alert("Payment successful but failed to record booking.");
+    }
+  };
+
   useEffect(() => {
-    const q = query(collection(db, 'events'), limit(6));
+    const q = query(collection(db, 'events'), limit(20));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      let fetchedEvents: Event[] = [];
       if (!snapshot.empty) {
-        const fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-        setEvents(fetchedEvents);
+        fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
       } else {
-        setEvents(sampleEvents);
+        fetchedEvents = sampleEvents;
       }
+      setEvents(fetchedEvents);
+      setFilteredEvents(fetchedEvents);
       setLoading(false);
     }, (error) => {
       console.error('Events listener error:', error);
       setEvents(sampleEvents);
+      setFilteredEvents(sampleEvents);
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const filtered = events.filter(event => {
+      const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           event.city.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = activeCategory === 'All' || event.category === activeCategory;
+      return matchesSearch && matchesCategory;
+    });
+    setFilteredEvents(filtered);
+  }, [searchTerm, activeCategory, events]);
+
   return (
     <section id="events" className="py-24 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-16">
+        <AnimatePresence>
+          {showCancel && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="mb-8 p-6 bg-red-500 text-white rounded-[2rem] shadow-lg shadow-red-100 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                  <X className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="font-bold text-lg">Payment Cancelled</div>
+                  <div className="text-sm opacity-90">Your booking was not completed. You can try again whenever you're ready.</div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowCancel(false)}
+                className="p-2 hover:bg-white/10 rounded-full transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-12">
           <div className="max-w-2xl">
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
@@ -192,8 +331,38 @@ const Events: React.FC = () => {
           </motion.div>
         </div>
 
+        {/* Search and Filters */}
+        <div className="mb-12 space-y-6">
+          <div className="relative max-w-2xl">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input 
+              type="text"
+              placeholder="Search by event title, location, or city..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-14 pr-6 py-5 bg-white border border-gray-100 rounded-[2rem] shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none text-lg transition-all"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${
+                  activeCategory === cat 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                  : 'bg-white text-gray-600 border border-gray-100 hover:bg-gray-50'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {events.map((event, i) => (
+          {filteredEvents.map((event, i) => (
             <motion.div
               key={event.id}
               initial={{ opacity: 0, y: 20 }}
@@ -316,31 +485,37 @@ const Events: React.FC = () => {
                         <div className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Price per person</div>
                         <div className="text-2xl font-black text-gray-900">₹{selectedEvent.budget}</div>
                       </div>
-                      <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex flex-col gap-3 w-full">
                         <button
                           onClick={() => handleBookNow(selectedEvent)}
                           disabled={bookingLoading}
-                          className="flex-1 bg-indigo-600 text-white px-6 py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 disabled:opacity-50"
+                          className="w-full bg-indigo-600 text-white px-6 py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-3 disabled:opacity-50"
                         >
                           {bookingLoading ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
                           ) : (
                             <CreditCard className="w-5 h-5" />
                           )}
-                          Pay with Card
+                          Pay with Card / Google Pay
                         </button>
-                        <button
-                          onClick={() => handleBookNow(selectedEvent)}
-                          disabled={bookingLoading}
-                          className="flex-1 bg-white text-gray-900 border border-gray-200 px-6 py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                          {bookingLoading ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            onClick={() => handleBookNow(selectedEvent)}
+                            disabled={bookingLoading}
+                            className="bg-white text-gray-900 border border-gray-200 px-6 py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
                             <img src="https://www.vectorlogo.zone/logos/paytm/paytm-icon.svg" className="w-5 h-5" alt="Paytm" />
-                          )}
-                          UPI / Paytm
-                        </button>
+                            UPI / Paytm
+                          </button>
+                          <button
+                            onClick={() => handleBookNow(selectedEvent)}
+                            disabled={bookingLoading}
+                            className="bg-white text-gray-900 border border-gray-200 px-6 py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            <img src="https://www.vectorlogo.zone/logos/paypal/paypal-icon.svg" className="w-5 h-5" alt="PayPal" />
+                            PayPal
+                          </button>
+                        </div>
                       </div>
                     </div>
                     
@@ -374,6 +549,38 @@ const Events: React.FC = () => {
           </button>
         </motion.div>
       </div>
+
+      <AnimatePresence>
+        {isRedirecting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-8"
+          >
+            <div className="w-24 h-24 bg-orange-50 rounded-[2.5rem] flex items-center justify-center mb-8 relative">
+              <Shield className="w-12 h-12 text-orange-600" />
+              <div className="absolute inset-0 border-4 border-orange-500 border-t-transparent rounded-[2.5rem] animate-spin" />
+            </div>
+            <h2 className="text-3xl font-black text-gray-900 mb-4">Redirecting to Secure Gateway</h2>
+            <p className="text-gray-500 max-w-sm">
+              Please do not refresh the page. We are connecting you to our secure payment partner to complete your booking for <span className="font-bold text-gray-900">"{pendingBookingEvent?.title}"</span>.
+            </p>
+            <div className="mt-12 flex items-center gap-8 opacity-50 grayscale">
+              <img src="https://www.vectorlogo.zone/logos/stripe/stripe-ar21.svg" className="h-8" alt="Stripe" />
+              <img src="https://www.vectorlogo.zone/logos/paytm/paytm-ar21.svg" className="h-8" alt="Paytm" />
+              <img src="https://www.vectorlogo.zone/logos/google_pay/google_pay-ar21.svg" className="h-8" alt="GPay" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <VerificationFlow 
+        isOpen={isVerifying}
+        onClose={() => setIsVerifying(false)}
+        onComplete={proceedToPayment}
+        eventTitle={pendingBookingEvent?.title || ''}
+      />
     </section>
   );
 };

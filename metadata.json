@@ -1,5 +1,5 @@
 {
   "name": "Saathi — Find Your Tribe",
   "description": "India's first verified social gathering platform for young professionals to discover trusted, real-world events.",
-  "requestFramePermissions": ["geolocation"]
+  "requestFramePermissions": ["geolocation", "camera"]
 }

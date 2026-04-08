@@ -57,7 +57,7 @@ async function startServer() {
           },
         ],
         mode: "payment",
-        success_url: `${process.env.APP_URL || "http://localhost:3000"}/?booking=success&eventId=${eventId}`,
+        success_url: `${process.env.APP_URL || "http://localhost:3000"}/profile?booking=success&eventId=${eventId}`,
         cancel_url: `${process.env.APP_URL || "http://localhost:3000"}/?booking=cancel`,
         customer_email: userEmail,
         metadata: {

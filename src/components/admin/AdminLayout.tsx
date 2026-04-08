@@ -15,12 +15,25 @@ import {
   BarChart3
 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
+import { db, collection, query, where, onSnapshot } from '../../firebase';
 
 const AdminLayout: React.FC = () => {
   const { user, signOut, isAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [pendingHostsCount, setPendingHostsCount] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!isAdmin) return;
+
+    const q = query(collection(db, 'users'), where('hostApplicationStatus', '==', 'pending'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPendingHostsCount(snapshot.size);
+    });
+
+    return unsubscribe;
+  }, [isAdmin]);
 
   if (!isAdmin) {
     return (
@@ -46,7 +59,7 @@ const AdminLayout: React.FC = () => {
     { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
     { icon: Calendar, label: 'Events', path: '/admin/events' },
     { icon: CreditCard, label: 'Bookings', path: '/admin/bookings' },
-    { icon: Users, label: 'Users', path: '/admin/users' },
+    { icon: Users, label: 'Users', path: '/admin/users', badge: pendingHostsCount },
     { icon: BarChart3, label: 'Reports', path: '/admin/reports' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ];
@@ -79,7 +92,13 @@ const AdminLayout: React.FC = () => {
                   <item.icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'}`} />
                   <span className="font-bold">{item.label}</span>
                 </div>
-                {isActive && <ChevronRight className="w-4 h-4" />}
+                {item.badge && item.badge > 0 ? (
+                  <div className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-white text-indigo-600' : 'bg-indigo-600 text-white'}`}>
+                    {item.badge}
+                  </div>
+                ) : isActive ? (
+                  <ChevronRight className="w-4 h-4" />
+                ) : null}
               </Link>
             );
           })}
@@ -143,14 +162,21 @@ const AdminLayout: React.FC = () => {
                     key={item.path}
                     to={item.path}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all ${
+                    className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
                       isActive 
                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
                         : 'text-gray-500 hover:bg-gray-50'
                     }`}
                   >
-                    <item.icon className="w-5 h-5" />
-                    <span className="font-bold">{item.label}</span>
+                    <div className="flex items-center gap-3">
+                      <item.icon className="w-5 h-5" />
+                      <span className="font-bold">{item.label}</span>
+                    </div>
+                    {item.badge && item.badge > 0 && (
+                      <div className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-white text-indigo-600' : 'bg-indigo-600 text-white'}`}>
+                        {item.badge}
+                      </div>
+                    )}
                   </Link>
                 );
               })}
